@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: agropakar
+    runtime: docker
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_KEY
+        value: "base64:..." # Isi sesuai key lokal Anda
