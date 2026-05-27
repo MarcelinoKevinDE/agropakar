@@ -1,13 +1,13 @@
 FROM php:8.3-apache
 
-# Instal dependensi sistem
+# Instal dependensi sistem yang diperlukan
 RUN apt-get update && apt-get install -y libpng-dev libzip-dev unzip git
 RUN docker-php-ext-install pdo_mysql gd zip
 
-# Instal Composer
+# Instal Composer secara otomatis
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Setup folder
+# Atur direktori kerja
 WORKDIR /var/www/html
 COPY . .
 
@@ -15,9 +15,9 @@ COPY . .
 RUN composer install --no-dev --optimize-autoloader
 RUN apt-get install -y nodejs npm && npm install && npm run build
 
-# Konfigurasi Apache agar mengarah ke public
+# Konfigurasi Apache agar mengarah ke folder 'public'
 RUN sed -i 's|/var/www/html|/var/www/html/public|g' /etc/apache2/sites-available/000-default.conf
 RUN a2enmod rewrite
 
-# Hak akses
+# Berikan izin akses
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
