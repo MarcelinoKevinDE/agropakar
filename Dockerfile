@@ -37,4 +37,5 @@ RUN php artisan config:cache && \
 
 # 8. Command utama
 # Ganti baris CMD Anda menjadi ini:
+# Ganti baris CMD Anda menjadi ini:
 CMD bash -c "php artisan config:clear && php artisan cache:clear && php artisan route:clear && php artisan migrate:fresh --force && apache2-foreground"
