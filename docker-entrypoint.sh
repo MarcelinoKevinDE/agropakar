@@ -1,11 +1,12 @@
 #!/bin/bash
 set -e
 
-# Bersihkan cache sebelum start
+# Bersihkan cache
 php artisan config:clear
-php artisan cache:clear
+php artisan route:clear
+php artisan view:clear
 
-# Jalankan migrasi database
+# Migrasi saja, jangan jalankan seed di sini jika tidak menggunakan updateOrCreate
 php artisan migrate --force
 
 # Jalankan Apache
