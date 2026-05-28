@@ -1,41 +1,45 @@
 FROM php:8.3-apache
 
-# 1. Instal dependensi sistem yang diperlukan
+# System dependencies
 RUN apt-get update && apt-get install -y \
-    libpng-dev \
-    libzip-dev \
-    unzip \
-    git \
-    libpq-dev \
-    && docker-php-ext-install pdo_mysql pdo_pgsql gd zip
+    git curl zip unzip libpng-dev libpq-dev libonig-dev libxml2-dev \
+    && docker-php-ext-install pdo pdo_pgsql pdo_mysql mbstring exif pcntl bcmath gd \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# 2. Instal Composer
+# Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# 3. Setup direktori kerja
+# Node / npm for Vite
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs
+
 WORKDIR /var/www/html
+
+# Copy project
 COPY . .
 
-# 4. Instal dependensi PHP dan Node.js
-RUN composer install --no-dev --optimize-autoloader
-RUN apt-get install -y nodejs npm && npm install && npm run build
+# Install PHP deps
+RUN composer install --no-dev --optimize-autoloader --no-interaction
 
-# 5. Konfigurasi Apache (Arahkan ke folder public)
+# Install JS deps & build assets
+RUN npm ci && npm run build
+
+# Apache document root → public/
 RUN sed -i 's|/var/www/html|/var/www/html/public|g' /etc/apache2/sites-available/000-default.conf
 RUN a2enmod rewrite
 
-# 6. Set izin akses folder agar Laravel bisa menulis cache & log
-# Ganti baris izin akses di Dockerfile dengan ini:
-RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
-RUN chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
+# Permissions
+RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
+    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
-# 7. Jalankan Migrasi & Cache sebelum Apache mulai
-# PENTING: Pastikan database sudah terhubung di Environment Variables Render
-RUN php artisan config:cache && \
-    php artisan route:cache && \
-    php artisan view:cache
+# Caches (no DB access at build time)
+RUN php artisan config:cache \
+    && php artisan route:cache \
+    && php artisan view:cache
 
-# 8. Command utama
-# Ganti baris CMD Anda menjadi ini:
-# Ganti baris CMD Anda menjadi ini:
-CMD bash -c "php artisan config:clear && php artisan cache:clear && php artisan route:clear && php artisan migrate:fresh --force && apache2-foreground"
+# Entrypoint runs migrations then starts Apache
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+EXPOSE 80
+ENTRYPOINT ["docker-entrypoint.sh"]
