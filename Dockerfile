@@ -25,7 +25,9 @@ RUN sed -i 's|/var/www/html|/var/www/html/public|g' /etc/apache2/sites-available
 RUN a2enmod rewrite
 
 # 6. Set izin akses folder agar Laravel bisa menulis cache & log
+# Ganti baris izin akses di Dockerfile dengan ini:
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+RUN chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
 # 7. Jalankan Migrasi & Cache sebelum Apache mulai
 # PENTING: Pastikan database sudah terhubung di Environment Variables Render
@@ -34,5 +36,5 @@ RUN php artisan config:cache && \
     php artisan view:cache
 
 # 8. Command utama
-CMD bash -c "php artisan migrate --force && apache2-foreground"
-CMD bash -c "php artisan migrate:fresh --force && apache2-foreground"
+# Ganti baris CMD Anda menjadi ini:
+CMD bash -c "php artisan config:clear && php artisan cache:clear && php artisan route:clear && php artisan migrate:fresh --force && apache2-foreground"
