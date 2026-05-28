@@ -156,6 +156,7 @@ class DiagnosaController extends Controller
 
             return redirect()->route('diagnosa.hasil');
         } catch (\Exception $e) {
+            // Log error ke sistem agar bisa dilacak di Logs Render
             Log::error('DiagnosaController@diagnosa error: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
             ]);
@@ -210,16 +211,6 @@ class DiagnosaController extends Controller
     // PRIVATE HELPERS
     // =========================================================================
 
-    /**
-     * Calculate Certainty Factor for each disease based on selected symptoms.
-     *
-     * CF Formula (sequential combination):
-     *   CF_new = CF_old + CF_i * (1 - CF_old)
-     *
-     * Where CF_i for each symptom = MB - MD
-     * MB = Measure of Belief (from knowledge base)
-     * MD = Measure of Disbelief (fixed)
-     */
     private function hitungCertaintyFactor(array $selectedGejala): array
     {
         $cfResults = [];
@@ -236,14 +227,12 @@ class DiagnosaController extends Controller
                 $mb = $gejalaKB[$kodeGejala];
                 $md = $this->defaultMD;
 
-                // CF per evidence
                 $cfEvidence = $mb - $md;
 
                 if ($cfEvidence <= 0) {
                     continue;
                 }
 
-                // Sequential CF combination
                 if ($cfKombinasi === 0.0) {
                     $cfKombinasi = $cfEvidence;
                 } else {
@@ -253,7 +242,6 @@ class DiagnosaController extends Controller
                 $matched++;
             }
 
-            // Only include diseases with at least 1 matching symptom and CF above threshold
             if ($matched > 0 && $cfKombinasi > 0.05) {
                 $cfResults[] = [
                     'kode'    => $kodePenyakit,
@@ -266,9 +254,6 @@ class DiagnosaController extends Controller
         return $cfResults;
     }
 
-    /**
-     * Map CF value to confidence level label.
-     */
     private function getCFLevel(float $cf): string
     {
         return match (true) {
@@ -280,9 +265,6 @@ class DiagnosaController extends Controller
         };
     }
 
-    /**
-     * Map CF value to a Tailwind color class for UI display.
-     */
     private function getCFColor(float $cf): string
     {
         return match (true) {
