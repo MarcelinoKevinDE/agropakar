@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "==> Clearing config cache (to pick up runtime env vars)..."
+echo "==> Clearing config cache..."
 php artisan config:clear
 
 echo "==> Running database migrations..."
