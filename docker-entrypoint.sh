@@ -1,14 +1,12 @@
 #!/bin/bash
 set -e
 
-echo "==> Clearing config cache..."
+# Bersihkan cache sebelum start
 php artisan config:clear
+php artisan cache:clear
 
-echo "==> Running database migrations..."
+# Jalankan migrasi database
 php artisan migrate --force
 
-echo "==> Re-caching config..."
-php artisan config:cache
-
-echo "==> Starting Apache..."
+# Jalankan Apache
 exec apache2-foreground
