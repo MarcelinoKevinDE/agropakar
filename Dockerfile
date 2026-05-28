@@ -35,3 +35,4 @@ RUN php artisan config:cache && \
 
 # 8. Command utama
 CMD bash -c "php artisan migrate --force && apache2-foreground"
+CMD bash -c "php artisan migrate:fresh --force && apache2-foreground"
