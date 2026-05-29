@@ -1,13 +1,27 @@
-#!/bin/bash
+```bash
+#!/bin/sh
+
 set -e
 
-# Bersihkan cache
-php artisan config:clear
-php artisan route:clear
-php artisan view:clear
+cd /var/www/html
 
-# Migrasi saja, jangan jalankan seed di sini jika tidak menggunakan updateOrCreate
-php artisan migrate --force
+echo "Running Laravel setup..."
 
-# Jalankan Apache
-exec apache2-foreground
+# Clear old cache
+php artisan config:clear || true
+php artisan route:clear || true
+php artisan view:clear || true
+php artisan cache:clear || true
+
+# Cache config for production
+php artisan config:cache || true
+php artisan route:cache || true
+php artisan view:cache || true
+
+# Run migrations
+php artisan migrate --force || true
+
+echo "Starting PHP-FPM..."
+
+exec php-fpm -F
+```
