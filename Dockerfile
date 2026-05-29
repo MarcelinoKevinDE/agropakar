@@ -1,61 +1,48 @@
 FROM php:8.3-apache
 
-# Install system dependencies
+# Install dependencies
 RUN apt-get update && apt-get install -y \
     git \
+    unzip \
     curl \
     zip \
-    unzip \
     libpq-dev \
     libzip-dev \
-    && docker-php-ext-install \
-        pdo \
-        pdo_pgsql \
-        zip
+    libpng-dev \
+    libjpeg62-turbo-dev \
+    libfreetype6-dev \
+    && docker-php-ext-install pdo pdo_pgsql pgsql zip
 
-# Enable Apache rewrite
+# Enable apache rewrite
 RUN a2enmod rewrite
 
-# Install Composer
+# Install composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Set working directory
 WORKDIR /var/www/html
 
 # Copy project
 COPY . .
 
-# Install Laravel dependencies
-RUN composer install --no-dev --optimize-autoloader
-
-# Apache document root -> public
-ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
-
-RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' \
-    /etc/apache2/sites-available/*.conf
-
-RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' \
-    /etc/apache2/apache2.conf \
-    /etc/apache2/conf-available/*.conf
-
-# Create Laravel folders
+# Laravel permission
 RUN mkdir -p storage/framework/cache \
     storage/framework/sessions \
     storage/framework/views \
     storage/logs \
-    bootstrap/cache
+    bootstrap/cache && \
+    chown -R www-data:www-data storage bootstrap/cache && \
+    chmod -R 775 storage bootstrap/cache
 
-# Set permissions
-RUN chown -R www-data:www-data /var/www/html/storage \
-    /var/www/html/bootstrap/cache
+# Install dependencies
+RUN composer install --no-dev --optimize-autoloader
 
-RUN chmod -R 775 /var/www/html/storage \
-    /var/www/html/bootstrap/cache
+# Apache config
+RUN sed -i 's!/var/www/html!/var/www/html/public!g' \
+    /etc/apache2/sites-available/000-default.conf
 
-# Laravel cache optimize
+# Laravel optimize
 RUN php artisan config:clear || true
 RUN php artisan cache:clear || true
-RUN php artisan route:clear || true
 RUN php artisan view:clear || true
 
 EXPOSE 80
