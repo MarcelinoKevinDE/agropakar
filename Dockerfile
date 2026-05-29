@@ -1,89 +1,60 @@
+FROM php:8.2-apache
 
-# ============================================================================
-# Dockerfile — Laravel 13 + PHP 8.3 for Render
-# ============================================================================
-
-# ----------------------------------------------------------------------------
-# Stage 1 — Composer Dependencies
-# ----------------------------------------------------------------------------
-FROM composer:2.7 AS vendor
-
-WORKDIR /app
-
-# Copy full project so artisan exists during composer install
-COPY . .
-
-# Install production dependencies
-RUN composer install \
-    --no-dev \
-    --no-interaction \
-    --no-progress \
-    --prefer-dist \
-    --optimize-autoloader \
-    --ignore-platform-reqs
-
-# ----------------------------------------------------------------------------
-# Stage 2 — Final PHP Image
-# ----------------------------------------------------------------------------
-FROM php:8.3-fpm-alpine
-
-# ----------------------------------------------------------------------------
-# System Packages
-# ----------------------------------------------------------------------------
-RUN apk add --no-cache \
-    nginx \
-    supervisor \
-    postgresql-client \
-    libpq-dev \
-    libpng-dev \
-    libjpeg-turbo-dev \
-    freetype-dev \
-    zip \
-    unzip \
+# Install dependencies
+RUN apt-get update && apt-get install -y \
     git \
     curl \
-    bash
-
-# ----------------------------------------------------------------------------
-# PHP Extensions
-# ----------------------------------------------------------------------------
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
+    zip \
+    unzip \
+    libpng-dev \
+    libjpeg62-turbo-dev \
+    libfreetype6-dev \
+    libwebp-dev \
+    libzip-dev \
+    libonig-dev \
+    libxml2-dev \
+    libicu-dev \
+    libavif-dev \
+    && docker-php-ext-configure gd \
+        --with-freetype \
+        --with-jpeg \
+        --with-webp \
+        --with-avif \
     && docker-php-ext-install \
         pdo \
-        pdo_pgsql \
-        pgsql \
-        gd \
-        bcmath \
+        pdo_mysql \
+        mbstring \
+        exif \
         pcntl \
-        opcache
+        bcmath \
+        intl \
+        zip \
+        gd
 
-# Optional Redis Extension
-# RUN pecl install redis && docker-php-ext-enable redis
+# Enable Apache rewrite
+RUN a2enmod rewrite
 
-# ----------------------------------------------------------------------------
-# Application Directory
-# ----------------------------------------------------------------------------
+# Install Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+# Set working directory
 WORKDIR /var/www/html
 
-# ----------------------------------------------------------------------------
-# Copy Application Files
-# ----------------------------------------------------------------------------
+# Copy project
 COPY . .
 
-# ----------------------------------------------------------------------------
-# Copy Vendor Dependencies From Builder
-# ----------------------------------------------------------------------------
-COPY --from=vendor /app/vendor ./vendor
+# Install Laravel dependencies
+RUN composer install --no-dev --optimize-autoloader
 
-# ----------------------------------------------------------------------------
-# Remove Cached Files + Old ENV
-# ----------------------------------------------------------------------------
-RUN rm -rf bootstrap/cache/* \
-    && rm -f .env
+# Set Apache document root to public
+ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
 
-# ----------------------------------------------------------------------------
-# Laravel Writable Directories
-# ----------------------------------------------------------------------------
+RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' \
+    /etc/apache2/sites-available/*.conf \
+    /etc/apache2/apache2.conf \
+    /etc/apache2/conf-available/*.conf
+
+# Permissions
 RUN mkdir -p \
     storage/app/public \
     storage/framework/cache \
@@ -94,29 +65,18 @@ RUN mkdir -p \
     && chmod -R 775 storage bootstrap/cache \
     && chown -R www-data:www-data storage bootstrap/cache
 
-# ----------------------------------------------------------------------------
-# PHP Opcache Production Settings
-# ----------------------------------------------------------------------------
+# Opcache
 RUN echo "opcache.enable=1" > /usr/local/etc/php/conf.d/opcache.ini \
     && echo "opcache.memory_consumption=256" >> /usr/local/etc/php/conf.d/opcache.ini \
     && echo "opcache.max_accelerated_files=20000" >> /usr/local/etc/php/conf.d/opcache.ini \
     && echo "opcache.validate_timestamps=0" >> /usr/local/etc/php/conf.d/opcache.ini \
     && echo "opcache.revalidate_freq=0" >> /usr/local/etc/php/conf.d/opcache.ini
 
-# ----------------------------------------------------------------------------
-# Entrypoint
-# ----------------------------------------------------------------------------
+# Copy entrypoint
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# ----------------------------------------------------------------------------
-# Expose Port
-# ----------------------------------------------------------------------------
 EXPOSE 80
 
-# ----------------------------------------------------------------------------
-# Start Container
-# ----------------------------------------------------------------------------
-CMD ["/usr/local/bin/docker-entrypoint.sh"]
-
+ENTRYPOINT ["docker-entrypoint.sh"]
