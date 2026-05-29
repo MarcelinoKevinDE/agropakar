@@ -15,12 +15,12 @@ Route::get('/', function () {
 });
 
 Route::prefix('diagnosa')->name('diagnosa.')->group(function () {
-    Route::get('/',        [DiagnosaController::class, 'index'])->name('index');
+    Route::get('/', [DiagnosaController::class, 'index'])->name('index');
     
-    // Jika di form menggunakan route('diagnosa.hitung'), maka gunakan name('hitung') di sini:
+    // Route ini sekarang bernama 'diagnosa.hitung'
     Route::post('/proses', [DiagnosaController::class, 'diagnosa'])->name('hitung'); 
     
-    Route::get('/hasil',   [DiagnosaController::class, 'hasil'])->name('hasil');
-    Route::get('/reset',   [DiagnosaController::class, 'reset'])->name('reset');
+    Route::get('/hasil', [DiagnosaController::class, 'hasil'])->name('hasil');
+    Route::get('/reset', [DiagnosaController::class, 'reset'])->name('reset');
     Route::get('/artikel/{id}', [ArtikelController::class, 'show'])->name('artikel.show');
 });

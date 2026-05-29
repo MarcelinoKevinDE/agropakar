@@ -7,7 +7,7 @@
         <p class="text-gray-600 mt-2">Pilih gejala yang tampak pada tanaman Anda saat ini</p>
     </div>
 
-    <form action="{{ route('diagnosa.proses') }}" method="POST" enctype="multipart/form-data" class="space-y-6">
+    <form action="{{ route('diagnosa.hitung') }}" method="POST" enctype="multipart/form-data" class="space-y-6">
         @csrf
 
         <div class="glass p-6 rounded-3xl shadow-sm border-2 border-[#81C784]/30">
