@@ -6,7 +6,7 @@ use App\Http\Controllers\ArtikelController;
 
 /*
 |--------------------------------------------------------------------------
-| Web Routes — AgroPakar Plant Disease Diagnosis System
+| Web Routes
 |--------------------------------------------------------------------------
 */
 
@@ -14,13 +14,36 @@ Route::get('/', function () {
     return redirect()->route('diagnosa.index');
 });
 
+/*
+|--------------------------------------------------------------------------
+| Diagnosa
+|--------------------------------------------------------------------------
+*/
+
 Route::prefix('diagnosa')->name('diagnosa.')->group(function () {
-    Route::get('/', [DiagnosaController::class, 'index'])->name('index');
-    
-    // Route ini sekarang bernama 'diagnosa.hitung'
-    Route::post('/proses', [DiagnosaController::class, 'diagnosa'])->name('hitung'); 
-    
-    Route::get('/hasil', [DiagnosaController::class, 'hasil'])->name('hasil');
-    Route::get('/reset', [DiagnosaController::class, 'reset'])->name('reset');
-    Route::get('/artikel/{id}', [ArtikelController::class, 'show'])->name('artikel.show');
+
+    // halaman diagnosa
+    Route::get('/', [DiagnosaController::class, 'index'])
+        ->name('index');
+
+    // proses diagnosa
+    Route::post('/proses', [DiagnosaController::class, 'diagnosa'])
+        ->name('proses');
+
+    // hasil diagnosa
+    Route::get('/hasil', [DiagnosaController::class, 'hasil'])
+        ->name('hasil');
+
+    // reset session
+    Route::get('/reset', [DiagnosaController::class, 'reset'])
+        ->name('reset');
 });
+
+/*
+|--------------------------------------------------------------------------
+| Artikel
+|--------------------------------------------------------------------------
+*/
+
+Route::get('/artikel/{id}', [ArtikelController::class, 'show'])
+    ->name('artikel.show');
