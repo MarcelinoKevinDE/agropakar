@@ -1,24 +1,176 @@
+# render.yaml
+# ============================================================================
+# Render Blueprint for Laravel 13 + Supabase PostgreSQL
+# ============================================================================
+#
+# HOW RENDER HANDLES ENV VARS — CRITICAL TO UNDERSTAND:
+#
+#   Render has two distinct execution environments:
+#
+#   1. BUILD ENVIRONMENT (buildCommand):
+#      - Runs during the build/deploy phase.
+#      - Has access to environment variables ONLY if they are marked
+#        "available at build time" in the Render dashboard, OR defined
+#        in this file under `envVars`.
+#      - This is where composer install, npm build, etc. run.
+#      - DO NOT run `php artisan migrate` here — it runs before the
+#        service is up and may not have DB access depending on timing.
+#
+#   2. RUNTIME ENVIRONMENT (startCommand / preDeployCommand):
+#      - Has full access to all environment variables.
+#      - `preDeployCommand` runs AFTER the build, BEFORE traffic is routed.
+#      - This is the CORRECT place for `php artisan migrate`.
+#
+# ============================================================================
+
 services:
   - type: web
-    name: agropakar
-    runtime: php
-    plan: free
-    buildCommand: "composer install --no-dev --optimize-autoloader && php artisan migrate --force"
-    startCommand: "apache2-foreground"
+    name: pakarmatik-laravel
+    runtime: php            # Use Render's native PHP runtime
+    # OR if using Docker:
+    # runtime: docker
+    # dockerfilePath: ./Dockerfile
+
+    region: singapore       # Choose closest to Supabase region
+
+    plan: starter           # or 'standard' for production
+
+    # -----------------------------------------------------------------------
+    # BUILD COMMAND
+    # Runs during the build phase. No database access needed here.
+    # The key step: delete ALL cached files before caching the new build.
+    # -----------------------------------------------------------------------
+    buildCommand: |
+      # 1. Remove ALL previously cached Laravel bootstrap files
+      #    This is the permanent fix for ghost cache problems.
+      rm -f bootstrap/cache/config.php
+      rm -f bootstrap/cache/routes-v7.php
+      rm -f bootstrap/cache/events.php
+      rm -f bootstrap/cache/packages.php
+      rm -f bootstrap/cache/services.php
+      rm -f .env
+
+      # 2. Install PHP dependencies (no dev, optimized autoloader)
+      composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+
+      # 3. Install and build frontend assets (skip if no frontend build)
+      # npm ci && npm run build
+
+      # 4. Set correct permissions
+      chmod -R 775 storage bootstrap/cache
+      chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || true
+
+      # 5. Cache config ONLY after env vars are confirmed available.
+      #    On Render, build-time env vars ARE available here IF you've
+      #    set them in the dashboard. We generate the cache now so the
+      #    runtime doesn't need write access to bootstrap/cache.
+      #
+      #    IMPORTANT: Only run this if your DB env vars are set as
+      #    "available at build time". Otherwise, remove this line and
+      #    let the preDeployCommand handle it.
+      php artisan config:cache
+      php artisan route:cache
+      php artisan view:cache
+
+    # -----------------------------------------------------------------------
+    # PRE-DEPLOY COMMAND
+    # Runs AFTER build, BEFORE new instance receives traffic.
+    # Full access to all runtime environment variables.
+    # CORRECT place for database migrations.
+    # -----------------------------------------------------------------------
+    preDeployCommand: |
+      # Re-clear and re-cache config at runtime to guarantee env vars are read
+      php artisan config:clear
+      php artisan config:cache
+
+      # Run migrations (--force required in production, skips the "are you sure" prompt)
+      php artisan migrate --force
+
+      # Optional: run seeders (only if idempotent)
+      # php artisan db:seed --force
+
+    # -----------------------------------------------------------------------
+    # START COMMAND
+    # The command Render uses to serve your application.
+    # -----------------------------------------------------------------------
+    startCommand: php artisan serve --host=0.0.0.0 --port=$PORT
+    # OR if using Apache/Nginx on Render's PHP runtime, this may be automatic.
+
+    # -----------------------------------------------------------------------
+    # ENVIRONMENT VARIABLES
+    # -----------------------------------------------------------------------
     envVars:
+
+      # ── App ────────────────────────────────────────────────────────────
+      - key: APP_NAME
+        value: PakarMatik
+
       - key: APP_ENV
         value: production
+
       - key: APP_DEBUG
-        value: "false"
+        value: false             # NEVER true in production
+
+      - key: APP_KEY
+        generateValue: true      # Render auto-generates a secure key
+
+      - key: APP_URL
+        value: https://pakarmatik-laravel.onrender.com   # Replace with your actual URL
+
+      # ── Database (Supabase PostgreSQL) ─────────────────────────────────
+      #
+      # Set these as SECRET environment variables in the Render dashboard.
+      # Do NOT hardcode credentials here in the yaml file.
+      # Use `sync: false` so they are not stored in version control.
+      #
       - key: DB_CONNECTION
         value: pgsql
+
       - key: DB_HOST
-        value: aws-1-ap-southeast-2.pooler.supabase.com
+        sync: false              # Set in Render dashboard: db.<ref>.supabase.co
+
       - key: DB_PORT
-        value: "6543"
+        value: 5432              # Use 5432 for direct (migrations). Use 6543 for pooler.
+
       - key: DB_DATABASE
-        value: postgres
+        value: postgres          # Supabase default database name
+
       - key: DB_USERNAME
-        value: postgres.qsbxvnamgelfaosgvvgp
+        sync: false              # Set in Render dashboard. e.g. postgres
+
       - key: DB_PASSWORD
-        value: aKevin_200221
+        sync: false              # Set in Render dashboard — your Supabase DB password
+
+      - key: DB_SSLMODE
+        value: require
+
+      # ── Cache / Session / Queue ────────────────────────────────────────
+      - key: CACHE_STORE
+        value: file              # Use 'redis' if you add a Render Redis instance
+
+      - key: SESSION_DRIVER
+        value: file              # Use 'redis' for multi-instance deployments
+
+      - key: QUEUE_CONNECTION
+        value: sync              # Use 'redis' or 'database' for real queues
+
+      # ── Logging ───────────────────────────────────────────────────────
+      - key: LOG_CHANNEL
+        value: stderr            # Render captures stderr — do NOT use 'daily' (disk-based)
+
+      - key: LOG_LEVEL
+        value: error             # 'error' in production, 'debug' only for troubleshooting
+
+    # -----------------------------------------------------------------------
+    # HEALTH CHECK
+    # -----------------------------------------------------------------------
+    healthCheckPath: /up         # Laravel 11+ ships with /up endpoint out of the box
+
+    # -----------------------------------------------------------------------
+    # DISK (optional — only if you write files to disk, e.g. storage/app)
+    # Render's filesystem is ephemeral. Use S3/Supabase Storage instead.
+    # -----------------------------------------------------------------------
+    # disk:
+    #   name: laravel-storage
+    #   mountPath: /var/www/html/storage/app
+    #   sizeGB: 1
