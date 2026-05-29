@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\DiagnosaController;
+use App\Http\Controllers\ArtikelController;
 
 /*
 |--------------------------------------------------------------------------
@@ -15,8 +16,11 @@ Route::get('/', function () {
 
 Route::prefix('diagnosa')->name('diagnosa.')->group(function () {
     Route::get('/',        [DiagnosaController::class, 'index'])->name('index');
-    Route::post('/proses', [DiagnosaController::class, 'diagnosa'])->name('proses');
+    
+    // Jika di form menggunakan route('diagnosa.hitung'), maka gunakan name('hitung') di sini:
+    Route::post('/proses', [DiagnosaController::class, 'diagnosa'])->name('hitung'); 
+    
     Route::get('/hasil',   [DiagnosaController::class, 'hasil'])->name('hasil');
     Route::get('/reset',   [DiagnosaController::class, 'reset'])->name('reset');
-    Route::get('/artikel/{id}', [App\Http\Controllers\ArtikelController::class, 'show'])->name('artikel.show');
+    Route::get('/artikel/{id}', [ArtikelController::class, 'show'])->name('artikel.show');
 });
