@@ -68,19 +68,30 @@ class DiagnosaController extends Controller
     /**
      * Display the diagnosis form.
      */
-    public function index(): \Illuminate\View\View
-    {
-        try {
-            $gejalas = Gejala::orderBy('nama_gejala')->get();
-            $artikels = Artikel::latest()->take(3)->get();
+   public function index(): \Illuminate\View\View
+{
+    try {
 
-            return view('diagnosa', compact('gejalas', 'artikels'));
-        } catch (\Exception $e) {
-            Log::error('DiagnosaController@index error: ' . $e->getMessage());
-            abort(500, 'Terjadi kesalahan saat memuat halaman diagnosis.');
+        $gejalas = Gejala::orderBy('nama_gejala')->get();
+
+        $artikel = [];
+
+        if (\Schema::hasTable('artikel')) {
+            $artikel = Artikel::latest()->take(3)->get();
         }
-    }
 
+        return view('diagnosa.index', compact('gejalas', 'artikel'));
+
+    } catch (\Exception $e) {
+
+        \Log::error('DiagnosaController@index error: ' . $e->getMessage());
+
+        return view('diagnosa.index', [
+            'gejalas' => [],
+            'artikel' => []
+        ]);
+    }
+}
     /**
      * Process the diagnosis submission.
      */
