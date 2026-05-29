@@ -100,16 +100,9 @@ RUN echo "opcache.enable=1" >> /usr/local/etc/php/conf.d/opcache.ini \
     && echo "opcache.validate_timestamps=0" >> /usr/local/etc/php/conf.d/opcache.ini \
     && echo "opcache.revalidate_freq=0" >> /usr/local/etc/php/conf.d/opcache.ini
 
-# Nginx configuration
-COPY docker/nginx.conf /etc/nginx/nginx.conf
-
-# Supervisor configuration (manages nginx + php-fpm)
-COPY docker/supervisord.conf /etc/supervisord.conf
-
-# Startup script — generates config cache at runtime (after env vars are injected)
-COPY docker/start.sh /usr/local/bin/start.sh
-RUN chmod +x /usr/local/bin/start.sh
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 80
 
-CMD ["/usr/local/bin/start.sh"]
+CMD ["/usr/local/bin/docker-entrypoint.sh"]
