@@ -6,33 +6,12 @@ RUN apt-get update && apt-get install -y \
     curl \
     zip \
     unzip \
-    libpng-dev \
-    libjpeg62-turbo-dev \
-    libfreetype6-dev \
-    libwebp-dev \
+    libpq-dev \
     libzip-dev \
-    libonig-dev \
-    libxml2-dev \
-    libicu-dev \
-    libavif-dev
-
-# Configure GD
-RUN docker-php-ext-configure gd \
-    --with-freetype \
-    --with-jpeg \
-    --with-webp \
-    --with-avif
-
-# Install PHP extensions
-RUN docker-php-ext-install \
-    pdo \
-    pdo_mysql \
-    mbstring \
-    exif \
-    bcmath \
-    intl \
-    zip \
-    gd
+    && docker-php-ext-install \
+        pdo \
+        pdo_pgsql \
+        zip
 
 # Enable Apache rewrite
 RUN a2enmod rewrite
@@ -40,45 +19,45 @@ RUN a2enmod rewrite
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Working directory
+# Set working directory
 WORKDIR /var/www/html
 
 # Copy project
 COPY . .
 
-# Install Composer dependencies
+# Install Laravel dependencies
 RUN composer install --no-dev --optimize-autoloader
 
-# Set Apache document root
+# Apache document root -> public
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
 
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' \
-    /etc/apache2/sites-available/*.conf \
+    /etc/apache2/sites-available/*.conf
+
+RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' \
     /etc/apache2/apache2.conf \
     /etc/apache2/conf-available/*.conf
 
 # Create Laravel folders
-RUN mkdir -p \
-    storage/framework/cache \
+RUN mkdir -p storage/framework/cache \
     storage/framework/sessions \
     storage/framework/views \
     storage/logs \
     bootstrap/cache
 
 # Set permissions
-RUN chmod -R 775 storage bootstrap/cache && \
-    chown -R www-data:www-data storage bootstrap/cache
+RUN chown -R www-data:www-data /var/www/html/storage \
+    /var/www/html/bootstrap/cache
 
-# Opcache
-RUN echo "opcache.enable=1" > /usr/local/etc/php/conf.d/opcache.ini && \
-    echo "opcache.memory_consumption=256" >> /usr/local/etc/php/conf.d/opcache.ini && \
-    echo "opcache.max_accelerated_files=20000" >> /usr/local/etc/php/conf.d/opcache.ini
+RUN chmod -R 775 /var/www/html/storage \
+    /var/www/html/bootstrap/cache
 
-# Copy entrypoint
-COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+# Laravel cache optimize
+RUN php artisan config:clear || true
+RUN php artisan cache:clear || true
+RUN php artisan route:clear || true
+RUN php artisan view:clear || true
 
 EXPOSE 80
 
-ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["apache2-foreground"]
