@@ -1,57 +1,47 @@
-<form method="POST"
-      action="{{ route('diagnosa.proses') }}"
-      enctype="multipart/form-data">
+{{-- Validation error display --}}
+@if ($errors->any())
+    <div class="nb-alert nb-alert-error mb-4">
+        <div class="nb-alert-title">VALIDASI GAGAL</div>
+        @foreach ($errors->all() as $error)
+            <div>-- {{ $error }}</div>
+        @endforeach
+    </div>
+@endif
 
-```
-@csrf
+<form action="{{ route('diagnosa.hitung') }}" method="POST" id="diagnosaForm">
+    @csrf
 
-{{-- Upload Foto --}}
-<div class="mb-6">
-    <label class="block mb-2 font-semibold">
-        Upload Foto Tanaman (Opsional)
-    </label>
-
-    <input type="file"
-           name="foto"
-           class="w-full border rounded-lg p-3">
-</div>
-
-{{-- List Gejala --}}
-<div class="grid gap-3">
-
-    @forelse($gejalas as $gejala)
-
-        <label class="flex items-center gap-3 p-4 border rounded-xl">
+    {{--
+        @forelse guards against an empty collection.
+        The variable name here ($gejala) MUST match the compact() key in index().
+        The checkbox name MUST be "gejala[]" — the square brackets tell PHP
+        to collect all checked values into an array in $_POST['gejala'].
+    --}}
+    @forelse ($gejala as $g)
+        <label class="nb-check-row gejala-item
+                       {{ in_array($g->id, old('gejala', [])) ? 'checked' : '' }}"
+               for="gejala_{{ $g->id }}">
 
             <input type="checkbox"
                    name="gejala[]"
-                   value="{{ $gejala->id }}">
+                   id="gejala_{{ $g->id }}"
+                   value="{{ $g->id }}"
+                   class="gejala-check"
+                   {{ in_array($g->id, old('gejala', [])) ? 'checked' : '' }}>
 
-            <span>
-                {{ $gejala->kode }}
-                -
-                {{ $gejala->nama_gejala }}
-            </span>
-
+            <div>
+                <div class="nb-check-label">{{ $g->nama_gejala }}</div>
+                <span class="nb-check-code">{{ $g->kode_gejala }}</span>
+            </div>
         </label>
-
     @empty
-
-        <div class="text-red-500">
-            Data gejala tidak tersedia
+        {{--
+            If this renders, your DB has no data — not a code bug.
+            Run: php artisan tinker -> Gejala::count()
+        --}}
+        <div style="padding:2rem; text-align:center; color:#888; font-size:0.82rem;">
+            TIDAK ADA DATA GEJALA DALAM DATABASE.
         </div>
-
     @endforelse
-
-</div>
-
-{{-- Submit --}}
-<button type="submit"
-        class="w-full mt-6 bg-green-600 text-white py-3 rounded-xl">
-
-    Proses Diagnosa
-
-</button>
-```
 
 </form>

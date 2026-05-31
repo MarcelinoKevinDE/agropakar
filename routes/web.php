@@ -1,49 +1,37 @@
 <?php
 
+use App\Models\Gejala;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\DiagnosaController;
-use App\Http\Controllers\ArtikelController;
 
-/*
-|--------------------------------------------------------------------------
-| Web Routes
-|--------------------------------------------------------------------------
-*/
+Route::get('/debug-gejala', function () {
+    $count = Gejala::count();
+    $first = Gejala::first();
 
-Route::get('/', function () {
-    return redirect()->route('diagnosa.index');
+    return response()->json([
+        'total_gejala' => $count,
+        'data_pertama' => $first,
+        'status' => $count > 0 ? 'Data ditemukan' : 'Database kosong'
+    ]);
 });
 
-/*
-|--------------------------------------------------------------------------
-| Diagnosa
-|--------------------------------------------------------------------------
-*/
+use App\Http\Controllers\DiagnosaController;
+use App\Http\Controllers\Admin\AdminDashboardController;
+
+Route::get('/', fn() => redirect()->route('diagnosa.index'));
 
 Route::prefix('diagnosa')->name('diagnosa.')->group(function () {
+    Route::get('/',       [DiagnosaController::class, 'index']) ->name('index');
 
-    // halaman diagnosa
-    Route::get('/', [DiagnosaController::class, 'index'])
-        ->name('index');
-
-    // proses diagnosa
-    Route::post('/proses', [DiagnosaController::class, 'diagnosa'])
-        ->name('proses');
-
-    // hasil diagnosa
-    Route::get('/hasil', [DiagnosaController::class, 'hasil'])
-        ->name('hasil');
-
-    // reset session
-    Route::get('/reset', [DiagnosaController::class, 'reset'])
-        ->name('reset');
+    // The POST route is named 'diagnosa.hitung' — matches what the form uses.
+    // The GET fallback silently redirects stale browser history to the form.
+    Route::post('/hitung', [DiagnosaController::class, 'hitung'])->name('hitung');
+    Route::get('/hitung',   fn() => redirect()->route('diagnosa.index'));
 });
 
-/*
-|--------------------------------------------------------------------------
-| Artikel
-|--------------------------------------------------------------------------
-*/
+Route::get('/about', [DiagnosaController::class, 'about'])->name('about');
 
-Route::get('/artikel/{id}', [ArtikelController::class, 'show'])
-    ->name('artikel.show');
+Route::prefix('admin')->name('admin.')->middleware(['auth'])->group(function () {
+    Route::get('/dashboard',                  [AdminDashboardController::class, 'index'])      ->name('dashboard');
+    Route::get('/history',                    [AdminDashboardController::class, 'history'])    ->name('history');
+    Route::get('/history/{diagnosisHistory}', [AdminDashboardController::class, 'historyShow'])->name('history.show');
+});
