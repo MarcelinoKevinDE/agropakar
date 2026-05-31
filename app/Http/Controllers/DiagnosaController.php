@@ -20,7 +20,7 @@ class DiagnosaController extends Controller
     // -------------------------------------------------------------------------
     public function index(): View
     {
-        $gejala = Gejala::orderBy('kode_gejala')->get();
+        $gejala = Gejala::orderBy('kode')->get();
 
         // TROUBLESHOOTING — uncomment ONE of these lines to verify DB data:
         // dd($gejala);                    // dumps the full collection and dies
