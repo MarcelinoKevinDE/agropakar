@@ -33,7 +33,7 @@
         </div>
     @endif
 
-    <form action="{{ route('diagnosa.proses') }}" method="POST" id="diagnosaForm">
+    <form action="{{ route('diagnosa.hitung') }}" method="POST" id="diagnosaForm">
         @csrf
 
         <div class="grid cols-7-5 g-4">
