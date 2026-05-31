@@ -31,7 +31,7 @@
 
             <div>
                 <div class="nb-check-label">{{ $g->nama_gejala }}</div>
-                <span class="nb-check-code">{{ $g->kode_gejala }}</span>
+                <span class="nb-check-code">{{ $g->kode ?? 'No Code' }}</span>
             </div>
         </label>
     @empty
