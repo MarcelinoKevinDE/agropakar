@@ -60,28 +60,31 @@
 
                 <!-- Gejala Checkboxes -->
                 <div id="gejalaList"
-                     style="border: var(--border); border-top: none;
-                            max-height: 520px; overflow-y: auto;">
-                    @forelse ($gejalas as $gejala)
-                        <label class="nb-check-row gejala-item {{ in_array($gejala->id, old('gejala', [])) ? 'checked' : '' }}"
-                               for="gejala_{{ $gejala->id }}">
-                            <input type="checkbox"
-                                   name="gejala[]"
-                                   id="gejala_{{ $gejala->id }}"
-                                   value="{{ $gejala->id }}"
-                                   class="gejala-check"
-                                   {{ in_array($gejala->id, old('gejala', [])) ? 'checked' : '' }}>
-                            <div>
-                                <div class="nb-check-label">{{ $gejala->nama_gejala }}</div>
-                                <span class="nb-check-code">{{ $gejala->kode_gejala }}</span>
-                            </div>
-                        </label>
-                    @empty
-                        <div style="padding: 2rem; text-align: center; color: #888; font-size: 0.82rem;">
-                            TIDAK ADA DATA GEJALA.
-                        </div>
-                    @endforelse
-                </div>
+     style="border: var(--border); border-top: none;
+            max-height: 520px; overflow-y: auto;">
+    
+    {{-- Ubah $gejalas menjadi $gejala --}}
+    @forelse ($gejala as $g) 
+        <label class="nb-check-row gejala-item {{ in_array($g->id, old('gejala', [])) ? 'checked' : '' }}"
+               for="gejala_{{ $g->id }}">
+            <input type="checkbox"
+                   name="gejala[]"
+                   id="gejala_{{ $g->id }}"
+                   value="{{ $g->id }}"
+                   class="gejala-check"
+                   {{ in_array($g->id, old('gejala', [])) ? 'checked' : '' }}>
+            <div>
+                <div class="nb-check-label">{{ $g->nama_gejala }}</div>
+                {{-- Pastikan nama kolom 'kode' sesuai dengan database Anda --}}
+                <span class="nb-check-code">{{ $g->kode }}</span>
+            </div>
+        </label>
+    @empty
+        <div style="padding: 2rem; text-align: center; color: #888; font-size: 0.82rem;">
+            TIDAK ADA DATA GEJALA.
+        </div>
+    @endforelse
+</div>
 
                 <!-- Select all / clear -->
                 <div style="border: var(--border); border-top: none; padding: 0.75rem;
