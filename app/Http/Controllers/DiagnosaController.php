@@ -1,147 +1,314 @@
 <?php
 
+// =============================================================================
+// FILE: app/Http/Requests/DiagnosaRequest.php
+// =============================================================================
+
+namespace App\Http\Requests;
+
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Contracts\Validation\Validator;
+use Illuminate\Http\Exceptions\HttpResponseException;
+
+class DiagnosaRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return true;
+    }
+
+    public function rules(): array
+    {
+        return [
+            'plant_id'  => ['required', 'integer', 'exists:plants,id'],
+            'nama_user' => ['nullable', 'string', 'max:100'],
+
+            /*
+             * gejala[] — the selected symptom IDs from the wizard.
+             * Each ID must exist in the gejala table.
+             */
+            'gejala'    => ['required', 'array', 'min:1'],
+            'gejala.*'  => ['required', 'integer', 'exists:gejala,id'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'plant_id.required' => 'Pilih jenis tanaman terlebih dahulu.',
+            'plant_id.exists'   => 'Tanaman yang dipilih tidak valid.',
+            'gejala.required'   => 'Pilih minimal satu gejala sebelum menjalankan diagnosis.',
+            'gejala.min'        => 'Pilih minimal :min gejala untuk melanjutkan.',
+            'gejala.*.exists'   => 'Salah satu gejala yang dipilih tidak valid. Silakan muat ulang halaman.',
+        ];
+    }
+
+    protected function failedValidation(Validator $validator): void
+    {
+        if ($this->expectsJson()) {
+            throw new HttpResponseException(
+                response()->json([
+                    'success' => false,
+                    'errors'  => $validator->errors(),
+                ], 422)
+            );
+        }
+
+        throw new HttpResponseException(
+            redirect()->back()->withErrors($validator)->withInput()
+        );
+    }
+}
+
+// =============================================================================
+// FILE: app/Http/Controllers/DiagnosaController.php
+// =============================================================================
+
 namespace App\Http\Controllers;
 
-use App\Models\Gejala;
-use App\Models\Rule;
-use App\Models\DiagnosisHistory;
 use App\Http\Requests\DiagnosaRequest;
+use App\Models\Plant;
+use App\Models\Gejala;
+use App\Models\SymptomCategory;
+use App\Models\DiagnosisSession;
+use App\Services\DiagnosisService;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Log;
 
 class DiagnosaController extends Controller
 {
-    // -------------------------------------------------------------------------
-    // STEP 1: Fetch all gejala and pass to the form view.
-    //
-    // compact('gejala') creates ['gejala' => $gejala].
-    // The view receives $gejala — the variable name in the view
-    // MUST match the string key passed to compact().
-    // -------------------------------------------------------------------------
-    public function index(): View
+    /*
+     * Inject DiagnosisService via constructor injection.
+     * Laravel's container resolves it automatically — no manual
+     * instantiation needed in the controller.
+     */
+    public function __construct(private readonly DiagnosisService $diagnosisService)
     {
-        $gejala = Gejala::orderBy('kode')->get();
-
-        // TROUBLESHOOTING — uncomment ONE of these lines to verify DB data:
-        // dd($gejala);                    // dumps the full collection and dies
-        // dd($gejala->count());           // just the count
-        // Log::debug('Gejala count', ['count' => $gejala->count()]);
-
-        // When you're satisfied the data is correct, remove the debug line.
-
-        return view('diagnosa.index', compact('gejala'));
     }
 
     // -------------------------------------------------------------------------
-    // STEP 2: Receive POST from the form, validate, run CF calculation.
-    //
-    // Route name: diagnosa.hitung  (POST /diagnosa/hitung)
+    // Step 1 — Plant Selection
     // -------------------------------------------------------------------------
-    public function hitung(DiagnosaRequest $request): View
+
+    /**
+     * Show the plant selection page (wizard step 1).
+     * Users pick which plant they are diagnosing.
+     */
+    public function selectPlant(): View
     {
-        // validated() is safe — DiagnosaRequest has already confirmed:
-        //   - 'gejala' exists and is an array with at least 1 item
-        //   - each ID exists in the gejala table
-        $validated   = $request->validated();
-        $selectedIds = $validated['gejala'];          // array of integer IDs
-        $namaUser    = $validated['nama_user'] ?? null;
-
-        // TROUBLESHOOTING — verify what was received:
-        // dd($selectedIds);
-        // Log::debug('Selected gejala IDs', ['ids' => $selectedIds]);
-
-        // Fetch matching rules with their relationships pre-loaded (avoids N+1)
-        $rules = Rule::with(['gejala', 'kerusakan'])
-            ->whereIn('gejala_id', $selectedIds)
+        $plants = Plant::where('is_active', true)
+            ->orderBy('nama_tanaman')
             ->get();
 
-        if ($rules->isEmpty()) {
-            return view('diagnosa.hasil', [
-                'hasil'        => [],
-                'namaUser'     => $namaUser,
-                'gejalaDipilih'=> Gejala::whereIn('id', $selectedIds)->get(),
-                'cfSteps'      => [],
-                'noRule'       => true,
-            ]);
-        }
-
-        // -----------------------------------------------------------------
-        // Certainty Factor engine
-        // CF per rule = MB - MD
-        // CF combine   = CF_old + CF_rule * (1 - CF_old)
-        // -----------------------------------------------------------------
-        $grouped = $rules->groupBy('kerusakan_id');
-        $hasil   = [];
-        $cfSteps = [];
-
-        foreach ($grouped as $kerusakanId => $groupRules) {
-            $kerusakan  = $groupRules->first()->kerusakan;
-            $cfCombined = 0.0;
-            $steps      = [];
-
-            foreach ($groupRules as $rule) {
-                $mb     = (float) $rule->mb;
-                $md     = (float) $rule->md;
-                $cfRule = $mb - $md;
-                $cfPrev = $cfCombined;
-
-                $cfCombined = $cfPrev + $cfRule * (1 - $cfPrev);
-
-                $steps[] = [
-                    'nama_gejala' => $rule->gejala->nama_gejala ?? '-',
-                    'mb'          => $mb,
-                    'md'          => $md,
-                    'cf_rule'     => round($cfRule, 4),
-                    'cf_prev'     => round($cfPrev, 4),
-                    'cf_new'      => round($cfCombined, 4),
-                    'formula'     => sprintf(
-                        'CF = %.4f + (%.4f - %.4f) × (1 - %.4f) = %.4f',
-                        $cfPrev, $mb, $md, $cfPrev, $cfCombined
-                    ),
-                ];
-            }
-
-            $cfFinal = max(0.0, min(1.0, $cfCombined));
-
-            $hasil[] = [
-                'kerusakan_id'   => $kerusakanId,
-                'nama_kerusakan' => $kerusakan->nama_kerusakan,
-                'solusi'         => $kerusakan->solusi,
-                'cf'             => round($cfFinal, 4),
-                'persen'         => round($cfFinal * 100, 2),
-                'level'          => DiagnosisHistory::deriveLevel($cfFinal),
-            ];
-
-            $cfSteps[$kerusakanId] = [
-                'nama_kerusakan' => $kerusakan->nama_kerusakan,
-                'steps'          => $steps,
-            ];
-        }
-
-        usort($hasil, fn($a, $b) => $b['cf'] <=> $a['cf']);
-
-        $gejalaDipilih = Gejala::whereIn('id', $selectedIds)->get();
-
-        DiagnosisHistory::create([
-            'nama_user'            => $namaUser,
-            'gejala_dipilih'       => $selectedIds,
-            'hasil_diagnosa'       => $hasil,
-            'cf_calculation_steps' => $cfSteps,
-            'ip_address'           => $request->ip(),
-            'user_agent'           => $request->userAgent(),
-        ]);
-
-        return view('diagnosa.hasil', [
-            'hasil'         => $hasil,
-            'namaUser'      => $namaUser,
-            'gejalaDipilih' => $gejalaDipilih,
-            'cfSteps'       => $cfSteps,
-            'noRule'        => false,
-        ]);
+        return view('diagnosa.select-plant', compact('plants'));
     }
 
-    public function about(): View
+    // -------------------------------------------------------------------------
+    // Step 2 — Symptom Selection (the wizard form)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Show the symptom selection form for a given plant (wizard step 2).
+     *
+     * Symptoms are loaded grouped by category so the Blade wizard
+     * can render tabs/steps per category without additional queries.
+     *
+     * The variable is named $gejala (not $gejalas) per spec.
+     */
+    public function index(Request $request, int $plantId): View
     {
-        return view('pages.about');
+        $plant = Plant::where('is_active', true)->findOrFail($plantId);
+
+        /*
+         * Load categories with their symptoms in one eager-loaded query.
+         * This prevents N+1 queries in the Blade template.
+         *
+         * Result structure:
+         *   SymptomCategory → has many Gejala
+         *
+         * The variable $gejala below is the flat collection used for
+         * backward-compatibility with old() restoring checkbox state.
+         */
+        $categories = SymptomCategory::with([
+            'gejala' => fn ($q) => $q->where('is_active', true)->orderBy('kode'),
+        ])
+            ->where('plant_id', $plantId)
+            ->orderBy('urutan')
+            ->get();
+
+        // Flat collection for old() restoration in the view
+        $gejala = $categories->flatMap->gejala;
+
+        // If the request carries an image analysis payload (from Gemini/Roboflow),
+        // parse it and pass pre-filled IDs to the view so JS can auto-check them.
+        $prefilledIds = [];
+        if ($request->has('image_payload')) {
+            $payload      = json_decode($request->input('image_payload'), true) ?? [];
+            $prefilledIds = $this->diagnosisService->parseImageAnalysisPayload($payload);
+        }
+
+        return view('diagnosa.index', compact(
+            'plant',
+            'categories',
+            'gejala',          // flat collection — variable name matches spec
+            'prefilledIds',    // IDs to auto-check (from image analysis)
+        ));
+    }
+
+    // -------------------------------------------------------------------------
+    // Step 3 — Run Diagnosis (POST handler)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Process the submitted symptom form, run the hybrid inference engine,
+     * and redirect to the results page.
+     *
+     * Using Post-Redirect-Get (PRG) pattern:
+     *   POST /diagnosa/hitung → redirect → GET /diagnosa/hasil/{sessionCode}
+     *
+     * This prevents double-submission on browser refresh.
+     */
+    public function hitung(DiagnosaRequest $request): RedirectResponse
+    {
+        $validated      = $request->validated();
+        $selectedIds    = $validated['gejala'];
+        $plantId        = (int) $validated['plant_id'];
+        $namaUser       = $validated['nama_user'] ?? null;
+
+        try {
+            $session = $this->diagnosisService->diagnose(
+                selectedGejalaIds: $selectedIds,
+                plantId:           $plantId,
+                namaUser:          $namaUser,
+                ipAddress:         $request->ip(),
+                userAgent:         $request->userAgent(),
+            );
+
+            return redirect()
+                ->route('diagnosa.hasil', $session->session_code)
+                ->with('success', 'Diagnosis berhasil dijalankan.');
+
+        } catch (\Throwable $e) {
+            Log::error('DiagnosisService failed', [
+                'plant_id'    => $plantId,
+                'gejala_ids'  => $selectedIds,
+                'error'       => $e->getMessage(),
+                'trace'       => $e->getTraceAsString(),
+            ]);
+
+            return redirect()
+                ->back()
+                ->withInput()
+                ->withErrors(['engine' => 'Terjadi kesalahan pada mesin inferensi. Silakan coba lagi.']);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Step 4 — Show Results
+    // -------------------------------------------------------------------------
+
+    /**
+     * Display the diagnosis results page.
+     *
+     * Uses session_code (not ID) in the URL so IDs are not enumerable.
+     */
+    public function hasil(string $sessionCode): View
+    {
+        $session = DiagnosisSession::with([
+            'results.disease.knowledgeBase',
+            'results.disease.plant',
+            'symptoms.gejala.category',
+            'plant',
+        ])
+            ->where('session_code', $sessionCode)
+            ->firstOrFail();
+
+        $hasil         = $session->results;        // Collection<DiagnosisResult>
+        $gejalaDipilih = $session->symptoms        // Collection — gejala objects
+            ->map->gejala
+            ->filter()
+            ->values();
+        $namaUser      = $session->nama_user;
+        $noRule        = $hasil->isEmpty();
+
+        return view('diagnosa.hasil', compact(
+            'session',
+            'hasil',
+            'gejalaDipilih',
+            'namaUser',
+            'noRule',
+        ));
+    }
+
+    // -------------------------------------------------------------------------
+    // Image Analysis Entry Point (architecture-ready)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Accept an uploaded plant image, forward it to the image analysis service,
+     * and redirect to the symptom form with pre-filled symptom IDs.
+     *
+     * This endpoint is ARCHITECTURE-READY. The actual Gemini/Roboflow API call
+     * is stubbed — wire it in when the integration is ready.
+     *
+     * @see DiagnosisService::parseImageAnalysisPayload()
+     */
+    public function analyzeImage(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'plant_id' => ['required', 'integer', 'exists:plants,id'],
+            'image'    => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192'],
+        ]);
+
+        $plantId = (int) $request->input('plant_id');
+        $image   = $request->file('image');
+
+        /*
+         * ── STUB: Replace this block with actual Gemini/Roboflow API call ──
+         *
+         * $imagePath   = $image->store('uploads/diagnosis', 'public');
+         * $base64Image = base64_encode(Storage::disk('public')->get($imagePath));
+         *
+         * $geminiResponse = Http::withHeaders(['Authorization' => 'Bearer ' . config('services.gemini.key')])
+         *     ->post(config('services.gemini.endpoint'), [
+         *         'image'  => $base64Image,
+         *         'prompt' => 'Identify visible plant disease symptoms from this image.',
+         *     ])
+         *     ->json();
+         *
+         * The payload structure must match DiagnosisService::parseImageAnalysisPayload()
+         * ─────────────────────────────────────────────────────────────────────
+         */
+
+        // Stub response — remove when real integration is implemented
+        $mockPayload = ['detected_symptoms' => []];
+
+        return redirect()
+            ->route('diagnosa.index', $plantId)
+            ->with('image_payload', json_encode($mockPayload))
+            ->with('info', 'Analisis gambar selesai. Gejala yang terdeteksi telah dipilih secara otomatis.');
+    }
+
+    // -------------------------------------------------------------------------
+    // Rediagnose (from results page)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Pre-fill the symptom form with the selections from a previous session.
+     * Lets the user iterate on a diagnosis without re-selecting from scratch.
+     */
+    public function rediagnose(string $sessionCode): RedirectResponse
+    {
+        $session = DiagnosisSession::with('symptoms')
+            ->where('session_code', $sessionCode)
+            ->firstOrFail();
+
+        $previousIds = $session->symptoms->pluck('gejala_id')->implode(',');
+
+        return redirect()
+            ->route('diagnosa.index', $session->plant_id)
+            ->with('prefilled_ids', $previousIds);
     }
 }
