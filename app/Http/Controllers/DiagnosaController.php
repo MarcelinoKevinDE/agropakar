@@ -98,13 +98,17 @@ class DiagnosaController extends Controller
      */
     public function selectPlant(): View
     {
-        $plants = Plant::where('is_active', true)
-            ->orderBy('nama_tanaman')
+        // Pastikan Anda sudah mengimpor:
+        // use App\Models\Plant;
+        // use Illuminate\Support\Facades\DB;
+        // use Illuminate\View\View;
+
+        $plants = Plant::where('is_active', DB::raw('true'))
+            ->orderBy('nama_tanaman', 'asc')
             ->get();
 
         return view('diagnosa.select-plant', compact('plants'));
     }
-
     // -------------------------------------------------------------------------
     // Step 2 — Symptom Selection (the wizard form)
     // -------------------------------------------------------------------------
