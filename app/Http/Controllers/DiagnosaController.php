@@ -12,7 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\DB; // IMPORT YANG BENAR
+use Illuminate\Support\Facades\DB; // Perbaikan: Namespace yang benar
 
 class DiagnosaController extends Controller
 {
@@ -22,7 +22,8 @@ class DiagnosaController extends Controller
 
     public function selectPlant(): View
     {
-        // PERBAIKAN: Gunakan boolean true, bukan DB::raw('true')
+        // Perbaikan: Gunakan boolean true, jangan gunakan DB::raw('true')
+        // Dengan Model Casts, ini akan dikonversi dengan benar untuk PostgreSQL
         $plants = Plant::where('is_active', true)
             ->orderBy('nama_tanaman', 'asc')
             ->get();
@@ -32,7 +33,6 @@ class DiagnosaController extends Controller
 
     public function index(Request $request, int $plantId): View
     {
-        // PERBAIKAN: Gunakan boolean true
         $plant = Plant::where('is_active', true)->findOrFail($plantId);
 
         $categories = SymptomCategory::with([
@@ -83,7 +83,6 @@ class DiagnosaController extends Controller
                 'plant_id' => $plantId,
                 'gejala_ids' => $selectedIds,
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
             ]);
 
             return redirect()
@@ -105,10 +104,7 @@ class DiagnosaController extends Controller
             ->firstOrFail();
 
         $hasil = $session->results;
-        $gejalaDipilih = $session->symptoms
-            ->map->gejala
-            ->filter()
-            ->values();
+        $gejalaDipilih = $session->symptoms->map->gejala->filter()->values();
         $namaUser = $session->nama_user;
         $noRule = $hasil->isEmpty();
 
@@ -134,7 +130,7 @@ class DiagnosaController extends Controller
         return redirect()
             ->route('diagnosa.index', $plantId)
             ->with('image_payload', json_encode($mockPayload))
-            ->with('info', 'Analisis gambar selesai. Gejala yang terdeteksi telah dipilih secara otomatis.');
+            ->with('info', 'Analisis gambar selesai.');
     }
 
     public function rediagnose(string $sessionCode): RedirectResponse
