@@ -6,8 +6,10 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Plant;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Contracts\Validation\Validator;
+use Illuminate\Support\Facades\DB; // FIX: Menambahkan titik koma
 use Illuminate\Http\Exceptions\HttpResponseException;
 
 class DiagnosaRequest extends FormRequest
