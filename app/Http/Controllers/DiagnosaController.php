@@ -12,7 +12,6 @@ use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\DB; // Perbaikan: Namespace yang benar
 
 class DiagnosaController extends Controller
 {
@@ -21,24 +20,24 @@ class DiagnosaController extends Controller
     }
 
     public function selectPlant(): View
-{
-    $plants = Plant::where('is_active', true)
-        ->orderBy('nama_tanaman', 'asc')
-        ->get();
+    {
+        $plants = Plant::whereRaw('"is_active" = true')
+            ->orderBy('nama_tanaman', 'asc')
+            ->get();
 
-    return view('diagnosa.select_plant', compact('plants')); // ← underscore
-}
+        return view('diagnosa.select_plant', compact('plants'));
+    }
 
-public function index(Request $request, int $plantId): View
-{
-    $plant = Plant::where('is_active', true)->findOrFail($plantId);
+    public function index(Request $request, int $plantId): View
+    {
+        $plant = Plant::whereRaw('"is_active" = true')->findOrFail($plantId);
 
-    $categories = SymptomCategory::with([
-        'gejala' => fn ($q) => $q->where('is_active', true)->orderBy('kode'),
-    ])
-        ->where('plant_id', $plantId)
-        ->orderBy('urutan')
-        ->get();
+        $categories = SymptomCategory::with([
+            'gejala' => fn ($q) => $q->whereRaw('"is_active" = true')->orderBy('kode'),
+        ])
+            ->where('plant_id', $plantId)
+            ->orderBy('urutan')
+            ->get();
 
         $gejala = $categories->flatMap->gejala;
 
@@ -78,9 +77,9 @@ public function index(Request $request, int $plantId): View
 
         } catch (\Throwable $e) {
             Log::error('DiagnosisService failed', [
-                'plant_id' => $plantId,
+                'plant_id'   => $plantId,
                 'gejala_ids' => $selectedIds,
-                'error' => $e->getMessage(),
+                'error'      => $e->getMessage(),
             ]);
 
             return redirect()
@@ -101,10 +100,10 @@ public function index(Request $request, int $plantId): View
             ->where('session_code', $sessionCode)
             ->firstOrFail();
 
-        $hasil = $session->results;
+        $hasil        = $session->results;
         $gejalaDipilih = $session->symptoms->map->gejala->filter()->values();
-        $namaUser = $session->nama_user;
-        $noRule = $hasil->isEmpty();
+        $namaUser     = $session->nama_user;
+        $noRule       = $hasil->isEmpty();
 
         return view('diagnosa.hasil', compact(
             'session',
@@ -119,10 +118,10 @@ public function index(Request $request, int $plantId): View
     {
         $request->validate([
             'plant_id' => ['required', 'integer', 'exists:plants,id'],
-            'image' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192'],
+            'image'    => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192'],
         ]);
 
-        $plantId = (int) $request->input('plant_id');
+        $plantId     = (int) $request->input('plant_id');
         $mockPayload = ['detected_symptoms' => []];
 
         return redirect()
