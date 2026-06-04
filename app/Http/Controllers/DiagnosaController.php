@@ -21,26 +21,24 @@ class DiagnosaController extends Controller
     }
 
     public function selectPlant(): View
-    {
-        // Perbaikan: Gunakan boolean true, jangan gunakan DB::raw('true')
-        // Dengan Model Casts, ini akan dikonversi dengan benar untuk PostgreSQL
-        $plants = Plant::where('is_active', DB::raw('true'))
-    ->orderBy('nama_tanaman', 'asc')
-    ->get();
+{
+    $plants = Plant::where('is_active', true)
+        ->orderBy('nama_tanaman', 'asc')
+        ->get();
 
-        return view('diagnosa.select-plant', compact('plants'));
-    }
+    return view('diagnosa.select_plant', compact('plants')); // ← underscore
+}
 
-    public function index(Request $request, int $plantId): View
-    {
-        $plant = Plant::where('is_active', DB::raw('true'))->findOrFail($plantId);
+public function index(Request $request, int $plantId): View
+{
+    $plant = Plant::where('is_active', true)->findOrFail($plantId);
 
-$categories = SymptomCategory::with([
-    'gejala' => fn ($q) => $q->where('is_active', DB::raw('true'))->orderBy('kode'),
-])
-            ->where('plant_id', $plantId)
-            ->orderBy('urutan')
-            ->get();
+    $categories = SymptomCategory::with([
+        'gejala' => fn ($q) => $q->where('is_active', true)->orderBy('kode'),
+    ])
+        ->where('plant_id', $plantId)
+        ->orderBy('urutan')
+        ->get();
 
         $gejala = $categories->flatMap->gejala;
 
